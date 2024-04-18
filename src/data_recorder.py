@@ -128,12 +128,27 @@ class Recorder:
             if self.prev_state is None:  # The first action should just be the first state
                 actions[self.sample_count] = (position, orientation)
             else:
-                delta_x = position.x - self.prev_state["position"].x
-                delta_y = position.y - self.prev_state["position"].y
-                delta_z = position.z - self.prev_state["position"].z
-                delta_position = intera_interface.Limb.Point(delta_x, delta_y, delta_z)
-                # TODO: calculate change in current orientation and previous orientation Quaternion (w, x, y, z).
-                delta_orientation = orientation
+                curr_x, curr_y, curr_z = endpoint_pose["position"]
+                prev_x, prev_y, prev_z = self.prev_state["position"]
+                delta_position = intera_interface.Limb.Point(curr_x - prev_x, curr_y - prev_y, curr_z - prev_z)
+
+                # Quaternion subtraction is different from regular, element-wise subtraction
+                curr_w, curr_x, curr_y, curr_z = orientation
+                prev_w, prev_x, prev_y, prev_z = self.prev_state["orientation"]
+
+                # Compute the conjugate of the previous orientation
+                prev_conj_w = prev_w
+                prev_conj_x = -prev_x
+                prev_conj_y = -prev_y
+                prev_conj_z = -prev_z
+
+                # Quaternion multiplication (prev_conjugate * current_orientation)
+                delta_w = prev_conj_w * curr_w - prev_conj_x * curr_x - prev_conj_y * curr_y - prev_conj_z * curr_z
+                delta_x = prev_conj_w * curr_x + prev_conj_x * curr_w + prev_conj_y * curr_z - prev_conj_z * curr_y
+                delta_y = prev_conj_w * curr_y - prev_conj_x * curr_z + prev_conj_y * curr_w + prev_conj_z * curr_x
+                delta_z = prev_conj_w * curr_z + prev_conj_x * curr_y - prev_conj_y * curr_x + prev_conj_z * curr_w
+
+                delta_orientation = intera_interface.Limb.Quaternion(delta_x, delta_y, delta_z, delta_w)
                 actions[self.sample_count] = (delta_position, delta_orientation)
             self.prev_state = endpoint_pose
             observation = self.camera.get_frame()

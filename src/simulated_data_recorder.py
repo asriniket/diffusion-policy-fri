@@ -99,8 +99,23 @@ class Recorder:
                 actions[self.sample_count] = (position, orientation)
             else:
                 delta_position = position - self.prev_state["position"]
-                # TODO: calculate change in current orientation and previous orientation Quaternion (w, x, y, z).
-                delta_orientation = orientation
+
+                curr_w, curr_x, curr_y, curr_z = orientation
+                prev_w, prev_x, prev_y, prev_z = self.prev_state["orientation"]
+
+                # Compute the conjugate of the previous orientation to get difference in quaternions
+                prev_conj_w = prev_w
+                prev_conj_x = -prev_x
+                prev_conj_y = -prev_y
+                prev_conj_z = -prev_z
+
+                # Quaternion multiplication (prev_conjugate * current_orientation)
+                delta_w = prev_conj_w * curr_w - prev_conj_x * curr_x - prev_conj_y * curr_y - prev_conj_z * curr_z
+                delta_x = prev_conj_w * curr_x + prev_conj_x * curr_w + prev_conj_y * curr_z - prev_conj_z * curr_y
+                delta_y = prev_conj_w * curr_y - prev_conj_x * curr_z + prev_conj_y * curr_w + prev_conj_z * curr_x
+                delta_z = prev_conj_w * curr_z + prev_conj_x * curr_y - prev_conj_y * curr_x + prev_conj_z * curr_w
+
+                delta_orientation = (delta_x, delta_y, delta_z, delta_w)
                 actions[self.sample_count] = (delta_position, delta_orientation)
             self.prev_state = {"position": position, "orientation": orientation}
             observation = np.random.randint(0, 256, (IMG_X, IMG_Y, 3), dtype='uint8')  # Random observation
