@@ -2,6 +2,7 @@ import os
 import threading
 import time
 
+import cv2
 import h5py
 import intera_interface
 import numpy as np
@@ -21,7 +22,7 @@ class RealSenseCamera:
         """Initialize RealSense camera pipeline to store RGB images with dimensions (IMG_X, IMG_Y)."""
         self.pipeline = rs.pipeline()
         self.config = rs.config()
-        self.config.enable_stream(rs.stream.color, IMG_X, IMG_Y, rs.format.bgr8)
+        self.config.enable_stream(rs.stream.color, IMG_X, IMG_Y, rs.format.bgr8, 30)
         self.pipeline.start(self.config)
 
     def get_frame(self):
@@ -29,7 +30,8 @@ class RealSenseCamera:
         frames = self.pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
         color_image = np.asanyarray(color_frame.get_data())
-        return color_image
+        color_image_rgb = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+        return color_image_rgb
 
     def close(self):
         """Shuts down the RealSense camera pipeline."""
@@ -76,7 +78,7 @@ class Recorder:
         demo_group.create_dataset("timestamps", (0,), maxshape=(None,), dtype="float32")
         demo_group.create_dataset("states", (0,), maxshape=(None,), dtype=self.dt)
         demo_group.create_dataset("actions", (0,), maxshape=(None,), dtype=self.dt)
-        demo_group.create_dataset("observations", (0, IMG_X, IMG_Y, 3), maxshape=(None, IMG_X, IMG_Y, 3), dtype='uint8')
+        demo_group.create_dataset("observations", (0, IMG_Y, IMG_X, 3), maxshape=(None, IMG_Y, IMG_X, 3), dtype='uint8')
 
         self.demo_group = demo_group
 
@@ -121,7 +123,7 @@ class Recorder:
             timestamps.resize((self.sample_count + 1,))
             states.resize((self.sample_count + 1,))
             actions.resize((self.sample_count + 1,))
-            observations.resize((self.sample_count + 1, IMG_X, IMG_Y, 3))
+            observations.resize((self.sample_count + 1, IMG_Y, IMG_X, 3))
 
             timestamps[self.sample_count] = timestamp_time
             states[self.sample_count] = (position, orientation)
@@ -199,6 +201,7 @@ def main():
     filename = input("Enter the filename to store the demonstration data in.\n")
     sample_interval = float(input("Enter the sampling interval (in seconds) for data collection.\n"))
     camera = RealSenseCamera()
+    rospy.init_node("endpoint_recorder")
     with h5py.File(f"{filename}.hdf5", "w") as file:
         recorder = Recorder(file, camera, sample_interval, store_observations=True)
         print("Press <ENTER> to start recording a demonstration or press <q> to exit the program.")
