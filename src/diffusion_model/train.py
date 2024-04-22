@@ -98,3 +98,28 @@ class Trainer():
         trainloader = self.get_dataloader()
         nets, ema = self.get_model()
         noise_scheduler = self.get_noise_scheduler(num_diffusion_iters)
+
+        optimizer = torch.optim.AdamW(
+            params=nets.parameters(),
+            lr=self.lr,
+            weight_decay=1e-6
+        )
+
+        lr_scheduler = get_scheduler(
+            name="cosine",
+            optimizer=optimizer,
+            num_warmup_steps=500,
+            num_training_steps=len(trainloader) * num_epochs
+        )
+
+        for epoch in range(num_epochs):
+            for batch in trainloader:
+                image = batch["image"].to(self.device)
+                agent_pos = batch["agent_pos"].to(self.device)
+                action = batch["action"].to(self.device)
+                B = agent_pos.shape[0]
+
+                image_features = nets["vision_encoder"](image.flatten(end_dim=1))
+                image_features = image_features.reshape(*image.shape[:2],-1)
+                obs_features = torch.cat([image_features, agent_pos], dim=-1)
+                obs_cond = obs_features.flatten(start_dim=1)
