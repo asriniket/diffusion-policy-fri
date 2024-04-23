@@ -112,6 +112,8 @@ class Trainer():
             num_training_steps=len(trainloader) * num_epochs
         )
 
+        epoch_loss = []
+
         for epoch in range(num_epochs):
             for batch in trainloader:
                 image = batch["image"].to(self.device)
@@ -123,3 +125,31 @@ class Trainer():
                 image_features = image_features.reshape(*image.shape[:2],-1)
                 obs_features = torch.cat([image_features, agent_pos], dim=-1)
                 obs_cond = obs_features.flatten(start_dim=1)
+
+                noise = torch.randn(action.shape, device=self.device)
+                timesteps = torch.randint(
+                    0, noise_scheduler.config.num_train_timesteps,
+                    (B, ), device=self.device
+                ).long()
+
+                noisy_actions = noise_scheduler.add_noise(
+                    action, noise, timesteps)
+                
+                noise_pred = nets["noise_pred_net"](noisy_actions, 
+                                                    timesteps, global_cond=obs_cond)
+                
+                loss = nn.functional.mse_loss(noise_pred, noise)
+
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                lr_scheduler.step()
+                ema.step(nets.parameters())
+
+                loss_cpu = loss.item()
+                epoch_loss.append(loss_cpu)
+            
+        ema_nets = nets
+        ema.copy_to(ema_nets.parameters())
+        return ema
