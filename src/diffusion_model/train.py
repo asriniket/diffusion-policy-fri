@@ -13,8 +13,8 @@ import zarr
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 from diffusers.optimization import get_scheduler
-from tqdm.auto import tqdm
 
+from helper_functions import get_into_dataloader_format
 
 # Class to handle training model, saves important data
 class Trainer():
@@ -43,7 +43,7 @@ class Trainer():
         '''
         diff_dataset = dataset.DiffDataset(self.demos, self.obs_horizon, self.pred_horizon, self.pose_stats, 
                                 self.orientation_stats, self.img_stats)
-        return torch.utils.DataLoader(diff_dataset, batch_size=self.batch_size, shuffle=True)
+        return torch.utils.data.DataLoader(diff_dataset, batch_size=self.batch_size, shuffle=True)
 
 
 
@@ -89,14 +89,14 @@ class Trainer():
             prediction_type='epsilon'
         )
     
-    def train(self, num_epochs=20, print_stats=True):
+    def train(self, checkpoint=None, num_epochs=20, print_stats=True):
         '''
         Runs training loop.
         '''
         num_diffusion_iters = 100
 
         trainloader = self.get_dataloader()
-        nets, ema = self.get_model()
+        nets, ema = self.get_model() if not checkpoint else model.load_pretrained(checkpoint, device, self.obs_horizon)
         noise_scheduler = self.get_noise_scheduler(num_diffusion_iters)
 
         optimizer = torch.optim.AdamW(
@@ -115,6 +115,7 @@ class Trainer():
         epoch_loss = []
 
         for epoch in range(num_epochs):
+            total_loss = 0.0
             for batch in trainloader:
                 image = batch["image"].to(self.device)
                 agent_pos = batch["agent_pos"].to(self.device)
@@ -148,8 +149,56 @@ class Trainer():
                 ema.step(nets.parameters())
 
                 loss_cpu = loss.item()
-                epoch_loss.append(loss_cpu)
+                total_loss += loss_cpu
             
+            if print_stats:
+                print(f"Epoch {epoch + 1}: Loss: {total_loss}")
+
+        torch.save(nets.state_dict(), self.save_file)
+        
         ema_nets = nets
         ema.copy_to(ema_nets.parameters())
-        return ema
+        # return ema, ema_nets
+    
+
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Device: {device}")
+
+    test = []
+    for i in range(5):
+        test.append([])
+        for x in range(5):
+            temp = {}
+            temp["image"] = np.random.randint(0, 255, size=(3, 666, 100))
+            temp["position"] = np.random.rand(1, 3)
+            temp["orientation"] = np.random.rand(1, 4) * 2 - 1
+            test[i].append(temp)
+
+    pose_stats = {"min" : 0, "max": 1}
+    orientation_stats = {"min" : -1, "max" : 1}
+    image_stats = {"min" : 0, "max" : 255}
+
+    pred_horizon = 4
+    print(pred_horizon)
+    obs_horizon = 3
+
+    trainer = Trainer(test, obs_horizon, pred_horizon, pose_stats, orientation_stats, image_stats, 
+                      batch_size=16, device=device)
+    
+    dataloader = trainer.get_dataloader()
+    # print(f"Length of Dataloader: {len(dataloader)}")
+    # for batch in dataloader:
+    #     print(batch["image"].shape)
+    #     print(batch["agent_pos"].shape)
+    #     print(batch["action"].shape)
+    #     break
+
+    trainer.train(num_epochs=2, print_stats=True)
+
+
+    # print("Loading model now")
+
+    # loaded = model.load_pretrained(save_file="checkpoint.pth", device=device, obs_horizon=obs_horizon)
+
+    # print(loaded)
