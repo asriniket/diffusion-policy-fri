@@ -234,7 +234,7 @@ class DiffDataset(Dataset):
     temp = self.dataset[idx]
 
     nsample["image"] = (temp["image"])
-    nsample["agent_pos"] = temp["agent_pos"].squeeze(1)
-    nsample["action"] = temp["action"].squeeze(1)
+    nsample["agent_pos"] = temp["agent_pos"].squeeze(1).float()
+    nsample["action"] = temp["action"].squeeze(1).float()
 
     return nsample
