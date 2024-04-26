@@ -342,3 +342,39 @@ def replace_bn_with_gn(
             num_channels=x.num_features)
     )
     return root_module
+
+
+def load_pretrained(save_file="checkpoint.pth", device="cpu", obs_horizon=16):
+    '''
+    Loads pretrained checkpoint for diffusion model
+    '''
+    vision_encoder = get_resnet("resnet18")
+    vision_encoder = replace_bn_with_gn(vision_encoder)
+
+    vision_feature_dim = 512
+    lowdim_obs_dim = 7
+    obs_dim = vision_feature_dim + lowdim_obs_dim
+    action_dim = 7
+
+    noise_pred_net = ConditionalUnet1D(
+        input_dim=action_dim,
+        global_cond_dim=obs_dim*obs_horizon
+    )
+
+    nets = nn.ModuleDict({
+        'vision_encoder': vision_encoder,
+        'noise_pred_net': noise_pred_net
+    })
+
+    nets = nets.to(torch.device(device))
+
+    state_dict = torch.load(save_file, map_location=device)
+
+    nets.load_state_dict(state_dict)
+
+    ema = EMAModel(
+        parameters=nets.parameters(),
+        power=0.75
+    )
+
+    return nets, ema
