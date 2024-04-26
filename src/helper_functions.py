@@ -7,7 +7,7 @@ def flatten_states_and_actions(states_or_actions):
         position = np.array(entry['position']).flatten()
         orientation = np.array(entry['orientation']).flatten()
     flattened_data.append(np.concatenate((position, orientation)))
-    return np.array(flattened_data);
+    return np.array(flattened_data)
 
 
 def convert_hdf5(input_file, output_file):
@@ -34,7 +34,7 @@ def convert_hdf5(input_file, output_file):
                 demo_out.attrs['description'] = demo_group.attrs['description']
 
 # def get_into_dataloader_format():
-def get_into_dataloader_format(input_file, output_file):
+def get_into_dataloader_format(input_file, output_file=None):
     # Open the input HDF5 file
     data_list = []
     position_stats = {"min" : 1000, "max": -1000}
